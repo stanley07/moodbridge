@@ -1,12 +1,12 @@
+import ChatBox from '@/components/ChatBox';
+
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col justify-between p-6">
+    <main className="min-h-screen p-4">
       <div>
-        <h1 className="text-4xl font-bold">Welcome to MoodBridge</h1>
-        <p className="mt-4 text-lg">Bridging your emotions with intelligent care.</p>
-        {/* Your other content */}
+        <h1 className="text-3xl font-bold mb-4 text-center">MoodBridge</h1>
+        <ChatBox />
       </div>
-
       <footer className="mt-12 text-center">
         <a
           href="https://bolt.new"
