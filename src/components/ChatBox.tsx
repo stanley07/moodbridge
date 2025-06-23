@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { fetchSpeechFromText } from '@/lib/elevenlabs';
 
 export default function ChatBox() {
   const [messages, setMessages] = useState<string[]>([]);
@@ -21,7 +22,18 @@ export default function ChatBox() {
     });
 
     const data = await response.json();
-    setMessages(prev => [...prev, `MoodBridge: ${data.reply}`]);
+    const botReply = data.reply;
+    setMessages(prev => [...prev, `MoodBridge: ${botReply}`]);
+
+    // 🔊 Convert bot reply to voice
+    try {
+      const audioBlob = await fetchSpeechFromText(botReply);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.play();
+    } catch (err) {
+      console.error('Voice playback failed:', err);
+    }
   };
 
   return (
