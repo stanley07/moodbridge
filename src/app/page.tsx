@@ -5,6 +5,8 @@ export default function Home() {
     <main className="min-h-screen p-4">
       <div>
         <h1 className="text-3xl font-bold mb-4 text-center">MoodBridge</h1>
+        <h3 className="text-4xl font-bold">Welcome to MoodBridge</h3>
+        <p className="mt-4 text-lg">Bridging your emotions with intelligent care.</p>
         <ChatBox />
       </div>
       <footer className="mt-12 text-center">
