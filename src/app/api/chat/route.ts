@@ -22,8 +22,11 @@ export async function POST(req: NextRequest) {
     const reply = completion.choices[0].message.content;
 
     return NextResponse.json({ reply });
-  } catch (error: any) {
-    console.error('OpenAI error:', error);
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
-  }
+    } catch (error: unknown) {
+        console.error('OpenAI error:', error);
+        if (error instanceof Error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+    }
 }
