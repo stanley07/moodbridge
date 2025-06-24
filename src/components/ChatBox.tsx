@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchSpeechFromText } from '@/lib/elevenlabs';
 import { logChat } from '@/lib/logChat';
 import { supabase } from '@/lib/supabaseClient';
+import Sentiment from 'sentiment';
 
 declare global {
   interface Window {
@@ -21,6 +22,7 @@ type Message = {
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
+  sentiment?: string;
 };
 
 export default function ChatBox({ user }: { user: any }) {
@@ -31,6 +33,9 @@ export default function ChatBox({ user }: { user: any }) {
   const recognitionRef = useRef<any>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  const sentimentAnalyzer = new Sentiment();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,7 +66,14 @@ export default function ChatBox({ user }: { user: any }) {
     };
 
     fetchMessages();
+    startListening(); // Auto start on load
   }, [user.id]);
+
+  const getSentimentLabel = (score: number) => {
+    if (score > 1) return '😊 Positive';
+    if (score < -1) return '😞 Negative';
+    return '😐 Neutral';
+  };
 
   const sendMessage = async (userMessage: string) => {
     setError(null);
@@ -80,11 +92,13 @@ export default function ChatBox({ user }: { user: any }) {
 
       const data = await response.json();
       const reply = data.reply;
+      const sentimentScore = sentimentAnalyzer.analyze(reply).score;
+      const sentiment = getSentimentLabel(sentimentScore);
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       setMessages(prev => [
         ...prev,
-        { sender: 'assistant', text: reply, timestamp: replyTimestamp },
+        { sender: 'assistant', text: reply, timestamp: replyTimestamp, sentiment },
       ]);
       await logChat(reply, 'assistant', user.id);
 
@@ -119,6 +133,11 @@ export default function ChatBox({ user }: { user: any }) {
     };
 
     recognition.onerror = (event: any) => {
+      if (event.error === 'aborted') {
+        console.warn('Speech recognition was aborted.');
+        return;
+      }
+    
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       setError('Voice recognition error occurred.');
@@ -140,7 +159,7 @@ export default function ChatBox({ user }: { user: any }) {
         msg =>
           `${msg.timestamp} - ${msg.sender === 'user' ? 'You' : 'MoodBridge'}: ${msg.text}`
       )
-      .join('\n');
+      .join('');
 
     const blob = new Blob([content], { type: 'text/plain' });
     const link = document.createElement('a');
@@ -150,18 +169,25 @@ export default function ChatBox({ user }: { user: any }) {
   };
 
   return (
-    <div>
-      <div className="text-right mb-2">
-        <button onClick={exportChat} className="text-blue-600 underline text-sm">
+    <div className={darkMode ? 'bg-gray-900 text-white min-h-screen' : 'bg-white text-black min-h-screen'}>
+      <div className="text-right p-4">
+        <button onClick={() => setDarkMode(!darkMode)} className="text-sm underline mr-4">
+          Toggle {darkMode ? 'Light' : 'Dark'} Mode
+        </button>
+        <button onClick={exportChat} className="text-blue-400 underline text-sm">
           Export Chat (.txt)
         </button>
       </div>
 
       <div className="p-4 max-w-xl mx-auto">
-        <div className="border p-4 rounded h-96 overflow-y-auto bg-white mb-4">
+        <div className="border p-4 rounded h-96 overflow-y-auto bg-white text-black mb-4 dark:bg-gray-800 dark:text-white">
           {messages.map((msg, i) => (
-            <div key={i} className="mb-2 whitespace-pre-line">
-              {msg.timestamp} - {msg.sender === 'user' ? 'You' : 'MoodBridge'}: {msg.text}
+            <div key={i} className="mb-3 whitespace-pre-line">
+              <strong className="block">{msg.sender === 'user' ? '🧑 You' : '🤖 MoodBridge'}</strong>
+              <span>{msg.timestamp} — {msg.text}</span>
+              {msg.sender === 'assistant' && msg.sentiment && (
+                <div className="text-sm text-gray-500 mt-1 italic">{msg.sentiment}</div>
+              )}
             </div>
           ))}
 
