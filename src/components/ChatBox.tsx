@@ -1,6 +1,13 @@
+// ChatBox.tsx - Refactored and Type-Safe
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  FormEvent,
+  ChangeEvent,
+} from 'react';
 import { fetchSpeechFromText } from '@/lib/elevenlabs';
 import { logChat } from '@/lib/logChat';
 import { supabase } from '@/lib/supabaseClient';
@@ -11,18 +18,45 @@ declare global {
     webkitSpeechRecognition: any;
     SpeechRecognition: any;
   }
+}4
+
+
+// ✅ SpeechRecognition Type Fix
+type SpeechRecognitionType = typeof window extends {
+  webkitSpeechRecognition: infer T;
+}
+  ? T
+  : never;
+
+type CustomSpeechRecognition = InstanceType<SpeechRecognitionType>;
+
+interface SpeechRecognitionEventLike extends Event {
+  results: {
+    [index: number]: {
+      0: { transcript: string };
+      isFinal: boolean;
+    };
+  };
 }
 
-const SpeechRecognition =
-  typeof window !== 'undefined'
-    ? window.SpeechRecognition || window.webkitSpeechRecognition
-    : null;
+interface SpeechRecognitionErrorEventLike extends Event {
+  error: string;
+}
+
+const getSpeechRecognition = (): SpeechRecognitionType | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  return (window.SpeechRecognition || window.webkitSpeechRecognition) as SpeechRecognitionType;
+};
 
 type Message = {
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
   sentiment?: string;
+};
+
+type ChatBoxProps = {
+  user: { id: string };
 };
 
 export default function ChatBox({ user }: { user: any }) {
@@ -33,9 +67,19 @@ export default function ChatBox({ user }: { user: any }) {
   const recognitionRef = useRef<any>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);  
 
   const sentimentAnalyzer = new Sentiment();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,16 +110,16 @@ export default function ChatBox({ user }: { user: any }) {
     };
 
     fetchMessages();
-    startListening(); // Auto start on load
+    //startListening(); // Auto start
   }, [user.id]);
 
-  const getSentimentLabel = (score: number) => {
+  const getSentimentLabel = (score: number): string => {
     if (score > 1) return '😊 Positive';
     if (score < -1) return '😞 Negative';
     return '😐 Neutral';
   };
 
-  const sendMessage = async (userMessage: string) => {
+  const sendMessage = async (userMessage: string): Promise<void> => {
     setError(null);
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setMessages(prev => [...prev, { sender: 'user', text: userMessage, timestamp }]);
@@ -113,11 +157,17 @@ export default function ChatBox({ user }: { user: any }) {
     }
   };
 
-  const startListening = () => {
-    if (!SpeechRecognition) return alert('SpeechRecognition not supported in this browser');
-    if (isListening) return;
+  const startListening = (): void => {
+    const SR = getSpeechRecognition();
+    if (!SR) {
+      alert('SpeechRecognition not supported in this browser');
+      return;
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.abort(); // Abort any ongoing recognition
+    }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -126,34 +176,34 @@ export default function ChatBox({ user }: { user: any }) {
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       const transcript = event.results[0][0].transcript;
       setInput('');
       sendMessage(transcript);
     };
 
-    recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') {
-        console.warn('Speech recognition was aborted.');
-        return;
-      }
-    
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       setError('Voice recognition error occurred.');
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition failed to start:', err);
+      setError('Unable to start voice input.');
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!input.trim()) return;
     await sendMessage(input);
     setInput('');
   };
 
-  const exportChat = () => {
+  const exportChat = (): void => {
     const content = messages
       .map(
         msg =>
@@ -169,11 +219,31 @@ export default function ChatBox({ user }: { user: any }) {
   };
 
   return (
-    <div className={darkMode ? 'bg-gray-900 text-white min-h-screen' : 'bg-white text-black min-h-screen'}>
-      <div className="text-right p-4">
-        <button onClick={() => setDarkMode(!darkMode)} className="text-sm underline mr-4">
-          Toggle {darkMode ? 'Light' : 'Dark'} Mode
-        </button>
+    <div className="min-h-screen bg-white text-black dark:bg-gray-900 dark:text-white">
+      <div className="bg-white text-black dark:bg-gray-800 dark:text-white">
+        <button
+            onClick={() => {
+              const newMode = !darkMode;
+              console.log('Toggling mode:', newMode); // 🔍 Debug
+
+              if (newMode) {
+                document.documentElement.classList.add('dark');
+                console.log('✅ Added .dark to <html>');
+              } else {
+                document.documentElement.classList.remove('dark');
+                console.log('🟡 Removed .dark from <html>');
+              }
+
+              setDarkMode(newMode);
+              console.log('Current classList:', document.documentElement.classList.value); // 🔍 Check state
+            }}
+            className="text-sm underline mr-4"
+          >
+            Toggle {darkMode ? 'Light' : 'Dark'} Mode
+          </button>
+
+
+
         <button onClick={exportChat} className="text-blue-400 underline text-sm">
           Export Chat (.txt)
         </button>
@@ -205,7 +275,7 @@ export default function ChatBox({ user }: { user: any }) {
             type="text"
             className="flex-1 border rounded px-2 py-1"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
             placeholder="Ask MoodBridge..."
           />
           <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
