@@ -13,13 +13,44 @@ import { logChat } from '@/lib/logChat';
 import { supabase } from '@/lib/supabaseClient';
 import Sentiment from 'sentiment';
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition: any;
-    SpeechRecognition: any;
-  }
-}4
 
+// 👇 This creates a custom type if it's missing in the current TypeScript context
+type SpeechRecognition =
+  typeof window extends { SpeechRecognition: infer T }
+    ? T extends new () => infer R
+      ? R
+      : never
+    : never;
+
+    declare global {
+      interface Window {
+        webkitSpeechRecognition: typeof SpeechRecognitionConstructor;
+        SpeechRecognition: typeof SpeechRecognitionConstructor;
+      }
+    
+      var SpeechRecognitionConstructor: {
+        new (): ISpeechRecognition;
+        prototype: ISpeechRecognition;
+      };
+    }
+    
+    interface ISpeechRecognition extends EventTarget {
+      lang: string;
+      continuous: boolean;
+      interimResults: boolean;
+      onstart: (() => void) | null;
+      onend: (() => void) | null;
+      onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+      onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+      start(): void;
+      stop(): void;
+      abort(): void;
+    }
+    
+
+    
+    
+  
 
 // ✅ SpeechRecognition Type Fix
 type SpeechRecognitionType = typeof window extends {
@@ -27,8 +58,6 @@ type SpeechRecognitionType = typeof window extends {
 }
   ? T
   : never;
-
-type CustomSpeechRecognition = InstanceType<SpeechRecognitionType>;
 
 interface SpeechRecognitionEventLike extends Event {
   results: {
@@ -59,12 +88,23 @@ type ChatBoxProps = {
   user: { id: string };
 };
 
-export default function ChatBox({ user }: { user: any }) {
+export default function ChatBox({ user }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const RecognitionClass =
+    typeof window !== 'undefined'
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
+
+  if (RecognitionClass) {
+    const recognition = new RecognitionClass();
+    recognitionRef.current = recognition;
+  }
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [darkMode, setDarkMode] = useState(false);  
@@ -79,7 +119,6 @@ export default function ChatBox({ user }: { user: any }) {
       root.classList.remove('dark');
     }
   }, [darkMode]);
-  
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -97,7 +136,11 @@ export default function ChatBox({ user }: { user: any }) {
         console.error('Failed to fetch messages:', error);
         setError('Failed to load messages.');
       } else if (data) {
-        const formatted: Message[] = data.map((entry: any) => ({
+        const formatted: Message[] = data.map((entry: {
+          sender: 'user' | 'assistant';
+          message: string;
+          created_at: string;
+        }) => ({
           sender: entry.sender,
           text: entry.message,
           timestamp: new Date(entry.created_at).toLocaleTimeString([], {
@@ -110,7 +153,6 @@ export default function ChatBox({ user }: { user: any }) {
     };
 
     fetchMessages();
-    //startListening(); // Auto start
   }, [user.id]);
 
   const getSentimentLabel = (score: number): string => {

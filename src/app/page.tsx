@@ -1,26 +1,30 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import ChatBox from '@/components/ChatBox'
-import Auth from '@/components/Auth'
+import { useEffect, useState } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
+import ChatBox from '@/components/ChatBox';
+import Auth from '@/components/Auth';
+import Image from 'next/image';
 
 export default function Home() {
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
+      setSession(session);
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+      setSession(session);
+    });
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <main className="min-h-screen p-4">
@@ -44,13 +48,15 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img
+          <Image
             src="/boltBadge.png"
             alt="Built with Bolt.new"
-            style={{ height: '40px', marginTop: '20px' }}
+            width={140}
+            height={40}
+            className="mx-auto mt-5"
           />
         </a>
       </footer>
     </main>
-  )
+  );
 }
