@@ -94,8 +94,14 @@ export default function ChatBox({ user }: ChatBoxProps) {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);  
 
-  const RecognitionClass =
+  const sentimentAnalyzer = new Sentiment();
+
+  useEffect(() => {
+    const RecognitionClass =
     typeof window !== 'undefined'
       ? window.SpeechRecognition || window.webkitSpeechRecognition
       : null;
@@ -104,12 +110,7 @@ export default function ChatBox({ user }: ChatBoxProps) {
     const recognition = new RecognitionClass();
     recognitionRef.current = recognition;
   }
-
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);  
-
-  const sentimentAnalyzer = new Sentiment();
+  });
 
   useEffect(() => {
     const root = document.documentElement;
