@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabaseClient';
 import ChatBox from '@/components/ChatBox';
 import Auth from '@/components/Auth';
 import Image from 'next/image';
+import TavusVideo from '@/components/TavusVideo';
+
 
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
@@ -37,11 +39,14 @@ export default function Home() {
 
         {session ? (
           <ChatBox user={session.user} />
+          
         ) : (
           <div className="mt-6">
             <Auth />
           </div>
+          
         )}
+        <TavusVideo />
       </div>
 
       <footer className="mt-12 text-center">

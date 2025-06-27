@@ -1,24 +1,25 @@
 import axios from 'axios';
 
-const ELEVENLABS_API_KEY = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY!;
-const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Example voice ID (Rachel)
+const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Replace with your actual voice ID
 
 export async function fetchSpeechFromText(text: string): Promise<Blob> {
+  const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('Missing ElevenLabs API key');
+  }
+
   const response = await axios.post(
     `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-    {
-      text,
-      model_id: 'eleven_monolingual_v1',
-      voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-    },
+    { text },
     {
       headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
+        'xi-api-key': apiKey,
         'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg'
       },
       responseType: 'blob',
     }
   );
+
   return response.data;
 }
