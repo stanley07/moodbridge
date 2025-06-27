@@ -26,8 +26,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     );
     res.status(200).json(response.data);
-  } catch (error: any) {
-    console.error('Tavus API error:', error?.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to create Tavus video' });
-  }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Tavus API error:', error.response?.data || error.message);
+    } else {
+      console.error('Unexpected error:', error);
+    }
+}
 }
