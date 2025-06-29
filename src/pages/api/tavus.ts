@@ -28,9 +28,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json(response.data);
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error('Tavus API error:', error.response?.data || error.message);
+      console.error('Tavus API error:', error.code || error.message);
+      res.status(500).json({ error: error.code || 'Tavus request failed' });
     } else {
       console.error('Unexpected error:', error);
+      res.status(500).json({ error: 'Unknown error' });
     }
-}
+  }
 }

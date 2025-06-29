@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Replace with your actual voice ID
+const VOICE_ID = 'aCChyB4P5WEomwRsOKRh'; // Replace with your actual voice ID
 
 export async function fetchSpeechFromText(text: string): Promise<Blob> {
   const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
