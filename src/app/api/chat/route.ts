@@ -1,6 +1,6 @@
 // src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const { message } = await req.json();
 
     if (!message) {
+      console.warn("⚠️ No message received in request body");
       return NextResponse.json({ error: 'No message provided' }, { status: 400 });
     }
 
@@ -20,13 +21,14 @@ export async function POST(req: NextRequest) {
     });
 
     const reply = completion.choices[0].message.content;
+    console.log("✅ OpenAI reply:", reply);
 
     return NextResponse.json({ reply });
-    } catch (error: unknown) {
-        console.error('OpenAI error:', error);
-        if (error instanceof Error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('❌ OpenAI API error:', error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    return NextResponse.json({ error: 'Unknown error occurred' }, { status: 500 });
+  }
 }

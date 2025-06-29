@@ -179,6 +179,14 @@ export default function ChatBox({ user }: ChatBoxProps) {
 
       const data = await response.json();
       const reply = data.reply;
+      try {
+        const blob = await fetchSpeechFromText(reply);
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      } catch (error) {
+        console.error('TTS error:', error);
+      }
       const sentimentScore = sentimentAnalyzer.analyze(reply).score;
       const sentiment = getSentimentLabel(sentimentScore);
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -189,9 +197,7 @@ export default function ChatBox({ user }: ChatBoxProps) {
       ]);
       await logChat(reply, 'assistant', user.id);
 
-      const audioBlob = await fetchSpeechFromText(reply);
-      const audioUrl = URL.createObjectURL(audioBlob);
-      new Audio(audioUrl).play();
+      
     } catch (err) {
       console.error('Failed to respond:', err);
       setError('Something went wrong while processing your request.');
