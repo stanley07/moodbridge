@@ -1,4 +1,4 @@
-// ChatBox.tsx - Refactored and Type-Safe
+// ChatBox.tsx - With Foldable Chat by Date
 'use client';
 
 import React, {
@@ -13,112 +13,56 @@ import { logChat } from '@/lib/logChat';
 import { supabase } from '@/lib/supabaseClient';
 import Sentiment from 'sentiment';
 
-
-// 👇 This creates a custom type if it's missing in the current TypeScript context
-type SpeechRecognition =
-  typeof window extends { SpeechRecognition: infer T }
-    ? T extends new () => infer R
-      ? R
-      : never
-    : never;
-
-    declare global {
-      interface Window {
-        webkitSpeechRecognition: typeof SpeechRecognitionConstructor;
-        SpeechRecognition: typeof SpeechRecognitionConstructor;
-      }
-    
-      var SpeechRecognitionConstructor: {
-        new (): ISpeechRecognition;
-        prototype: ISpeechRecognition;
-      };
-    }
-    
-    interface ISpeechRecognition extends EventTarget {
-      lang: string;
-      continuous: boolean;
-      interimResults: boolean;
-      onstart: (() => void) | null;
-      onend: (() => void) | null;
-      onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-      onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
-      start(): void;
-      stop(): void;
-      abort(): void;
-    }
-    
-
-    
-    
-  
-
-// ✅ SpeechRecognition Type Fix
-type SpeechRecognitionType = typeof window extends {
-  webkitSpeechRecognition: infer T;
-}
-  ? T
-  : never;
-
-interface SpeechRecognitionEventLike extends Event {
-  results: {
-    [index: number]: {
-      0: { transcript: string };
-      isFinal: boolean;
-    };
-  };
-}
-
-interface SpeechRecognitionErrorEventLike extends Event {
-  error: string;
-}
-
-const getSpeechRecognition = (): SpeechRecognitionType | undefined => {
+// ✅ Native browser SpeechRecognition
+const getSpeechRecognition = () => {
   if (typeof window === 'undefined') return undefined;
-  return (window.SpeechRecognition || window.webkitSpeechRecognition) as SpeechRecognitionType;
+  return (window.SpeechRecognition || window.webkitSpeechRecognition);
 };
 
-type Message = {
+// ✅ Group messages by date
+function groupMessagesByDate(messages: Message[]) {
+  return messages.reduce((groups: Record<string, Message[]>, msg) => {
+    const date = new Date(msg.timestamp).toLocaleDateString();
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(msg);
+    return groups;
+  }, {});
+}
+
+interface Message {
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
   sentiment?: string;
-};
+}
 
-type ChatBoxProps = {
+interface ChatBoxProps {
   user: { id: string };
-};
+}
 
 export default function ChatBox({ user }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
+
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);  
 
   const sentimentAnalyzer = new Sentiment();
 
   useEffect(() => {
-    const RecognitionClass =
-    typeof window !== 'undefined'
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
-      : null;
-
-  if (RecognitionClass) {
-    const recognition = new RecognitionClass();
-    recognitionRef.current = recognition;
-  }
-  });
+    const RecognitionClass = getSpeechRecognition();
+    if (RecognitionClass) {
+      recognitionRef.current = new RecognitionClass();
+    }
+  }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (darkMode) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
   useEffect(() => {
@@ -137,17 +81,10 @@ export default function ChatBox({ user }: ChatBoxProps) {
         console.error('Failed to fetch messages:', error);
         setError('Failed to load messages.');
       } else if (data) {
-        const formatted: Message[] = data.map((entry: {
-          sender: 'user' | 'assistant';
-          message: string;
-          created_at: string;
-        }) => ({
+        const formatted: Message[] = data.map((entry: any) => ({
           sender: entry.sender,
           text: entry.message,
-          timestamp: new Date(entry.created_at).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+          timestamp: new Date(entry.created_at).toISOString(),
         }));
         setMessages(formatted);
       }
@@ -156,15 +93,19 @@ export default function ChatBox({ user }: ChatBoxProps) {
     fetchMessages();
   }, [user.id]);
 
+  const toggleDate = (date: string) => {
+    setCollapsedDates(prev => ({ ...prev, [date]: !prev[date] }));
+  };
+
   const getSentimentLabel = (score: number): string => {
     if (score > 1) return '😊 Positive';
     if (score < -1) return '😞 Negative';
     return '😐 Neutral';
   };
 
-  const sendMessage = async (userMessage: string): Promise<void> => {
+  const sendMessage = async (userMessage: string) => {
     setError(null);
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date().toISOString();
     setMessages(prev => [...prev, { sender: 'user', text: userMessage, timestamp }]);
     await logChat(userMessage, 'user', user.id);
 
@@ -179,42 +120,40 @@ export default function ChatBox({ user }: ChatBoxProps) {
 
       const data = await response.json();
       const reply = data.reply;
+
       try {
         const blob = await fetchSpeechFromText(reply);
         const audioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(audioUrl);
-        audio.play();
-      } catch (error) {
-        console.error('TTS error:', error);
+        new Audio(audioUrl).play();
+      } catch (ttsError) {
+        console.error('TTS error:', ttsError);
       }
+
       const sentimentScore = sentimentAnalyzer.analyze(reply).score;
       const sentiment = getSentimentLabel(sentimentScore);
-      const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const replyTimestamp = new Date().toISOString();
 
       setMessages(prev => [
         ...prev,
         { sender: 'assistant', text: reply, timestamp: replyTimestamp, sentiment },
       ]);
       await logChat(reply, 'assistant', user.id);
-
-      
     } catch (err) {
       console.error('Failed to respond:', err);
-      setError('Something went wrong while processing your request.');
+      setError('Something went wrong. Try again.');
     } finally {
       setIsTyping(false);
     }
   };
 
-  const startListening = (): void => {
+  const startListening = () => {
     const SR = getSpeechRecognition();
     if (!SR) {
-      alert('SpeechRecognition not supported in this browser');
+      alert('SpeechRecognition not supported');
       return;
     }
-    if (recognitionRef.current) {
-      recognitionRef.current.abort(); // Abort any ongoing recognition
-    }
+
+    if (recognitionRef.current) recognitionRef.current.abort();
 
     const recognition = new SR();
     recognitionRef.current = recognition;
@@ -225,40 +164,31 @@ export default function ChatBox({ user }: ChatBoxProps) {
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
 
-    recognition.onresult = (event: SpeechRecognitionEventLike) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       setInput('');
       sendMessage(transcript);
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
-      console.error('Speech recognition error:', event.error);
+    recognition.onerror = () => {
       setIsListening(false);
       setError('Voice recognition error occurred.');
     };
 
-    try {
-      recognition.start();
-    } catch (err) {
-      console.error('Speech recognition failed to start:', err);
-      setError('Unable to start voice input.');
-    }
+    recognition.start();
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
     await sendMessage(input);
     setInput('');
   };
 
-  const exportChat = (): void => {
-    const content = messages
-      .map(
-        msg =>
-          `${msg.timestamp} - ${msg.sender === 'user' ? 'You' : 'MoodBridge'}: ${msg.text}`
-      )
-      .join('');
+  const exportChat = () => {
+    const content = messages.map(
+      m => `${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${m.sender === 'user' ? 'You' : 'MoodBridge'}: ${m.text}`
+    ).join('\n');
 
     const blob = new Blob([content], { type: 'text/plain' });
     const link = document.createElement('a');
@@ -269,43 +199,40 @@ export default function ChatBox({ user }: ChatBoxProps) {
 
   return (
     <div className="min-h-screen bg-white text-black dark:bg-gray-900 dark:text-white">
-      <div className="bg-white text-black dark:bg-gray-800 dark:text-white">
+      <div className="bg-white text-black dark:bg-gray-800 dark:text-white px-4 py-2">
         <button
-            onClick={() => {
-              const newMode = !darkMode;
-              console.log('Toggling mode:', newMode); // 🔍 Debug
-
-              if (newMode) {
-                document.documentElement.classList.add('dark');
-                console.log('✅ Added .dark to <html>');
-              } else {
-                document.documentElement.classList.remove('dark');
-                console.log('🟡 Removed .dark from <html>');
-              }
-
-              setDarkMode(newMode);
-              console.log('Current classList:', document.documentElement.classList.value); // 🔍 Check state
-            }}
-            className="text-sm underline mr-4"
-          >
-            Toggle {darkMode ? 'Light' : 'Dark'} Mode
-          </button>
-
-
-
+          onClick={() => setDarkMode(prev => !prev)}
+          className="text-sm underline mr-4"
+        >
+          Toggle {darkMode ? 'Light' : 'Dark'} Mode
+        </button>
         <button onClick={exportChat} className="text-blue-400 underline text-sm">
           Export Chat (.txt)
         </button>
       </div>
 
       <div className="p-4 max-w-xl mx-auto">
-        <div className="border p-4 rounded h-96 overflow-y-auto bg-white text-black mb-4 dark:bg-gray-800 dark:text-white">
-          {messages.map((msg, i) => (
-            <div key={i} className="mb-3 whitespace-pre-line">
-              <strong className="block">{msg.sender === 'user' ? '🧑 You' : '🤖 MoodBridge'}</strong>
-              <span>{msg.timestamp} — {msg.text}</span>
-              {msg.sender === 'assistant' && msg.sentiment && (
-                <div className="text-sm text-gray-500 mt-1 italic">{msg.sentiment}</div>
+        <div className="border p-4 rounded h-[450px] overflow-y-auto bg-white text-black mb-4 dark:bg-gray-800 dark:text-white">
+          {Object.entries(groupMessagesByDate(messages)).map(([date, msgs]) => (
+            <div key={date} className="mb-4">
+              <h4
+                onClick={() => toggleDate(date)}
+                className="font-semibold text-sm mb-2 cursor-pointer text-blue-500"
+              >
+                {collapsedDates[date] ? '▶' : '▼'} {date}
+              </h4>
+              {!collapsedDates[date] && (
+                <div>
+                  {msgs.map((msg, i) => (
+                    <div key={i} className="mb-3 whitespace-pre-line">
+                      <strong className="block">{msg.sender === 'user' ? '🧑 You' : '🤖 MoodBridge'}</strong>
+                      <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {msg.text}</span>
+                      {msg.sentiment && (
+                        <div className="text-sm text-gray-500 mt-1 italic">{msg.sentiment}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           ))}

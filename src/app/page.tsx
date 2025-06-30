@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import ChatBox from '@/components/ChatBox';
 import Auth from '@/components/Auth';
 import Image from 'next/image';
-import TavusVideo from '@/components/TavusVideo';
+//import TavusVideo from '@/components/TavusVideo'; <TavusVideo />
 
 
 export default function Home() {
@@ -46,21 +46,20 @@ export default function Home() {
           </div>
           
         )}
-        <TavusVideo />
       </div>
 
-      <footer className="mt-12 text-center">
-        <a
-          href="https://bolt.new"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+      {/* Footer */}
+      <footer className="text-center py-6 border-t border-gray-300 dark:border-gray-700">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Built with ❤️ using Bolt.new, Supabase, OpenAI, and ElevenLabs
+        </p>
+        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
           <Image
             src="/boltBadge.png"
             alt="Built with Bolt.new"
             width={140}
             height={40}
-            className="mx-auto mt-5"
+            className="mx-auto mt-3"
           />
         </a>
       </footer>
